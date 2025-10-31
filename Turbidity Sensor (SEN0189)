@@ -1,0 +1,28 @@
+// SEN0189 Turbidity Sensor
+#define TURBIDITY_PIN A0
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(TURBIDITY_PIN, INPUT);
+  Serial.println("SEN0189 Turbidity Sensor Started");
+}
+
+void loop() {
+  int sensorValue = analogRead(TURBIDITY_PIN);
+  float voltage = sensorValue * (5.0 / 1023.0);
+  float turbidity = (-1120.4 * voltage * voltage * voltage + 5742.3 * voltage * voltage - 4352.9 * voltage + 730.0); // NTU
+  
+  // Constrain turbidity value
+  if (turbidity < 0) turbidity = 0;
+  if (turbidity > 1000) turbidity = 1000;
+  
+  // Send data via serial (format: "TURB:sensorValue:voltage:turbidity")
+  Serial.print("TURB:");
+  Serial.print(sensorValue);
+  Serial.print(":");
+  Serial.print(voltage, 3);
+  Serial.print(":");
+  Serial.println(turbidity, 1);
+  
+  delay(1000);
+}
