@@ -1,0 +1,24 @@
+// Simple Pump Test - ON for 5 sec, OFF for 10 sec
+#define PUMP_PIN 11  // Connect pump via transistor/relay to this pin
+
+void setup() {
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, LOW);  // Start with pump OFF
+  
+  Serial.begin(9600);
+  Serial.println("Pump Test Started");
+  Serial.println("ON: 5 sec | OFF: 10 sec");
+  Serial.println("-------------------------");
+}
+
+void loop() {
+  // Turn pump ON
+  digitalWrite(PUMP_PIN, HIGH);
+  Serial.println("PUMP: ON");
+  delay(5000);  // Run for 5 seconds
+
+  // Turn pump OFF
+  digitalWrite(PUMP_PIN, LOW);
+  Serial.println("PUMP: OFF");
+  delay(10000); // Wait 10 seconds before next cycle
+}
