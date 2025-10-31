@@ -1,0 +1,32 @@
+// HC-SR04 Ultrasonic Sensor - Water Level
+#define TRIG_PIN 9
+#define ECHO_PIN 10
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  Serial.println("HC-SR04 Water Level Sensor Started");
+}
+
+void loop() {
+  // Generate trigger pulse
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  // Read echo pulse
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  float distance = duration * 0.034 / 2; // Distance in cm
+  float waterLevel = 30.0 - distance; // Assuming 30cm max tank depth
+  
+  // Send data via serial (format: "LEVEL:distance:waterLevel")
+  Serial.print("LEVEL:");
+  Serial.print(distance);
+  Serial.print(":");
+  Serial.println(waterLevel);
+  
+  delay(1000);
+}
