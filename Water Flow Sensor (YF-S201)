@@ -1,0 +1,36 @@
+// YF-S201 Water Flow Sensor
+#define FLOW_PIN 2
+volatile int flowPulse = 0;
+float flowRate = 0.0;
+float totalVolume = 0.0;
+unsigned long oldTime = 0;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(FLOW_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowISR, RISING);
+  Serial.println("YF-S201 Flow Sensor Started");
+  oldTime = millis();
+}
+
+void loop() {
+  if ((millis() - oldTime) > 1000) {
+    // Calculate flow rate (L/min) - YF-S201 calibration factor
+    flowRate = ((1000.0 / (millis() - oldTime)) * flowPulse) / 4.5;
+    totalVolume = totalVolume + ((flowRate / 60.0) * (millis() - oldTime));
+    
+    // Send data via serial (format: "FLOW:flowRate:totalVolume")
+    Serial.print("FLOW:");
+    Serial.print(flowRate, 2);
+    Serial.print(":");
+    Serial.println(totalVolume, 3);
+    
+    flowPulse = 0;
+    oldTime = millis();
+  }
+  delay(100);
+}
+
+void flowISR() {
+  flowPulse++;
+}
