@@ -1,0 +1,189 @@
+/*
+ * Tailings Flow Monitoring System - Integrated
+ * Laboratory-Scale Prototype for Greater Sudbury Project
+ * 
+ * Sensors:
+ * - HC-SR04 Ultrasonic (Water Level)
+ * - YF-S201 Water Flow
+ * - SEN0189 Turbidity
+ * - Mini Water Pump Control
+ * 
+ * Author: Laboratory Prototype Development
+ * Date: 2025
+ */
+
+#include <Wire.h>
+
+// Pin Definitions
+#define TRIG_PIN 9
+#define ECHO_PIN 10
+#define FLOW_PIN 2
+#define TURBIDITY_PIN A0
+#define PUMP_PIN 11
+#define PUMP_SWITCH_PIN 3
+
+// Variables
+volatile int flowPulse = 0;
+float flowRate = 0.0;
+float totalVolume = 0.0;
+unsigned long oldTime = 0;
+bool pumpState = false;
+unsigned long pumpStartTime = 0;
+const unsigned long PUMP_DURATION = 5000; // 5 seconds
+
+// System status
+unsigned long lastSensorRead = 0;
+const unsigned long SENSOR_INTERVAL = 1000; // 1 second intervals
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("=== TAILINGS FLOW MONITORING SYSTEM ===");
+  Serial.println("Laboratory-Scale Prototype - Greater Sudbury");
+  Serial.println("Initializing sensors...");
+  
+  // Ultrasonic setup
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
+  // Flow sensor setup
+  pinMode(FLOW_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowISR, RISING);
+  
+  // Turbidity setup
+  pinMode(TURBIDITY_PIN, INPUT);
+  
+  // Pump setup
+  pinMode(PUMP_PIN, OUTPUT);
+  pinMode(PUMP_SWITCH_PIN, INPUT_PULLUP);
+  digitalWrite(PUMP_PIN, LOW);
+  
+  oldTime = millis();
+  Serial.println("System initialized successfully!");
+  Serial.println("Format: TYPE:VALUE1:VALUE2:TIMESTAMP");
+  Serial.println("=====================================");
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+  
+  // Pump control (runs continuously)
+  controlPump();
+  
+  // Sensor readings every SENSOR_INTERVAL
+  if (currentTime - lastSensorRead >= SENSOR_INTERVAL) {
+    readUltrasonic();
+    readTurbidity();
+    calculateFlow();
+    printSystemStatus();
+    lastSensorRead = currentTime;
+  }
+  
+  delay(100); // Small delay for stability
+}
+
+void flowISR() {
+  flowPulse++;
+}
+
+void readUltrasonic() {
+  // Generate trigger pulse
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  // Read echo pulse
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout
+  float distance = (duration == 0) ? 30.0 : (duration * 0.034 / 2); // Default to max if timeout
+  float waterLevel = 30.0 - distance; // Assuming 30cm max tank depth
+  
+  // Constrain values
+  if (distance > 30.0) distance = 30.0;
+  if (distance < 2.0) distance = 2.0;
+  if (waterLevel < 0) waterLevel = 0;
+  
+  // Send data
+  Serial.print("LEVEL:");
+  Serial.print(distance, 1);
+  Serial.print(":");
+  Serial.print(waterLevel, 1);
+  Serial.print(":");
+  Serial.println(millis());
+}
+
+void readTurbidity() {
+  int sensorValue = analogRead(TURBIDITY_PIN);
+  float voltage = sensorValue * (5.0 / 1023.0);
+  float turbidity = (-1120.4 * voltage * voltage * voltage + 5742.3 * voltage * voltage - 4352.9 * voltage + 730.0);
+  
+  // Constrain turbidity (0-1000 NTU)
+  if (turbidity < 0) turbidity = 0;
+  if (turbidity > 1000) turbidity = 1000;
+  
+  // Send data
+  Serial.print("TURB:");
+  Serial.print(sensorValue);
+  Serial.print(":");
+  Serial.print(voltage, 3);
+  Serial.print(":");
+  Serial.print(turbidity, 1);
+  Serial.print(":");
+  Serial.println(millis());
+}
+
+void calculateFlow() {
+  if ((millis() - oldTime) > 1000) {
+    // Calculate flow rate (L/min) - YF-S201 calibration: 4.5 pulses per liter
+    flowRate = ((1000.0 / (millis() - oldTime)) * flowPulse) / 4.5;
+    totalVolume = totalVolume + ((flowRate / 60.0) * (millis() - oldTime));
+    
+    // Constrain flow rate
+    if (flowRate < 0) flowRate = 0;
+    
+    // Send data
+    Serial.print("FLOW:");
+    Serial.print(flowRate, 2);
+    Serial.print(":");
+    Serial.print(totalVolume, 3);
+    Serial.print(":");
+    Serial.println(millis());
+    
+    flowPulse = 0;
+    oldTime = millis();
+  }
+}
+
+void controlPump() {
+  static bool lastSwitchState = false;
+  bool currentSwitchState = !digitalRead(PUMP_SWITCH_PIN); // Inverted due to pullup
+  
+  // Detect switch press
+  if (currentSwitchState && !lastSwitchState && !pumpState) {
+    digitalWrite(PUMP_PIN, HIGH);
+    pumpState = true;
+    pumpStartTime = millis();
+    Serial.print("PUMP:ON:");
+    Serial.println(millis());
+  }
+  
+  // Auto-stop after duration
+  if (pumpState && (millis() - pumpStartTime >= PUMP_DURATION)) {
+    digitalWrite(PUMP_PIN, LOW);
+    pumpState = false;
+    Serial.print("PUMP:OFF:AUTO:");
+    Serial.println(millis());
+  }
+  
+  lastSwitchState = currentSwitchState;
+}
+
+void printSystemStatus() {
+  // System heartbeat
+  Serial.print("STATUS:RUNNING:");
+  Serial.print(flowRate, 2);
+  Serial.print(":");
+  Serial.print(totalVolume, 3);
+  Serial.print(":");
+  Serial.println(millis());
+}
